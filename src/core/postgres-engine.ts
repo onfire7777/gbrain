@@ -795,6 +795,13 @@ export class PostgresEngine implements BrainEngine {
       params.push(type);
       typeClause = `AND p.type = $${params.length}`;
     }
+    // v0.33: multi-type filter for whoknows. AND-applied alongside the
+    // single-value `type` filter (callers can use either or both).
+    let typesClause = '';
+    if (opts?.types && opts.types.length > 0) {
+      params.push(opts.types);
+      typesClause = `AND p.type = ANY($${params.length}::text[])`;
+    }
     let excludeSlugsClause = '';
     if (excludeSlugs?.length) {
       params.push(excludeSlugs);
@@ -845,6 +852,7 @@ export class PostgresEngine implements BrainEngine {
         JOIN sources s ON s.id = p.source_id
         WHERE cc.search_vector @@ websearch_to_tsquery('english', $1)
           ${typeClause}
+          ${typesClause}
           ${excludeSlugsClause}
           ${detailLow ? `AND cc.chunk_source = 'compiled_truth'` : ''}
           ${languageClause}
@@ -921,6 +929,13 @@ export class PostgresEngine implements BrainEngine {
       params.push(type);
       typeClause = `AND p.type = $${params.length}`;
     }
+    // v0.33: multi-type filter for whoknows. AND-applied alongside the
+    // single-value `type` filter (callers can use either or both).
+    let typesClause = '';
+    if (opts?.types && opts.types.length > 0) {
+      params.push(opts.types);
+      typesClause = `AND p.type = ANY($${params.length}::text[])`;
+    }
     let excludeSlugsClause = '';
     if (excludeSlugs?.length) {
       params.push(excludeSlugs);
@@ -966,6 +981,7 @@ export class PostgresEngine implements BrainEngine {
       JOIN sources s ON s.id = p.source_id
       WHERE cc.search_vector @@ websearch_to_tsquery('english', $1)
         ${typeClause}
+        ${typesClause}
         ${excludeSlugsClause}
         ${detailLow ? `AND cc.chunk_source = 'compiled_truth'` : ''}
         ${languageClause}
@@ -1022,6 +1038,13 @@ export class PostgresEngine implements BrainEngine {
       params.push(type);
       typeClause = `AND p.type = $${params.length}`;
     }
+    // v0.33: multi-type filter for whoknows. AND-applied alongside the
+    // single-value `type` filter (callers can use either or both).
+    let typesClause = '';
+    if (opts?.types && opts.types.length > 0) {
+      params.push(opts.types);
+      typesClause = `AND p.type = ANY($${params.length}::text[])`;
+    }
     let excludeSlugsClause = '';
     if (excludeSlugs?.length) {
       params.push(excludeSlugs);
@@ -1077,6 +1100,7 @@ export class PostgresEngine implements BrainEngine {
         WHERE cc.${col} IS NOT NULL ${modalityFilter}
           ${detailLow ? `AND cc.chunk_source = 'compiled_truth'` : ''}
           ${typeClause}
+          ${typesClause}
           ${excludeSlugsClause}
           ${languageClause}
           ${symbolKindClause}
@@ -3122,6 +3146,23 @@ export class PostgresEngine implements BrainEngine {
       INSERT INTO config (key, value) VALUES (${key}, ${value})
       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `;
+  }
+
+  async unsetConfig(key: string): Promise<number> {
+    const sql = this.sql;
+    const result = await sql`DELETE FROM config WHERE key = ${key}` as unknown as { count: number };
+    return result.count ?? 0;
+  }
+
+  async listConfigKeys(prefix: string): Promise<string[]> {
+    const sql = this.sql;
+    // LIKE-escape literal % and _ so a config key with those chars resolves correctly.
+    const escaped = prefix.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const pattern = `${escaped}%`;
+    const rows = await sql<{ key: string }[]>`
+      SELECT key FROM config WHERE key LIKE ${pattern} ESCAPE '\\' ORDER BY key
+    `;
+    return rows.map(r => r.key);
   }
 
   // Migration support

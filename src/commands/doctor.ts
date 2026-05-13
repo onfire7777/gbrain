@@ -86,6 +86,66 @@ export function computeDoctorReport(checks: Check[]): DoctorReport {
  * Tolerance matches migration v48: any value with abs(weight - on_grid) > 1e-3
  * is genuinely off-grid (the 0.05 grid is 5e-2; float32 noise is ~1e-7).
  */
+/**
+ * v0.33: whoknows_health — verify the eval fixture is present at the
+ * documented path. Lightweight; just checks file existence and row count,
+ * not the eval gate outcome (that runs via `gbrain eval whoknows`).
+ *
+ * Surface is intentionally narrow: a missing fixture means the eval
+ * cannot run at all, which is the highest-leverage signal. Hit-rate
+ * regression detection lives in `gbrain eval whoknows --json` and is
+ * the job of the eval command, not the doctor sweep.
+ */
+export async function whoknowsHealthCheck(_engine: BrainEngine): Promise<Check> {
+  try {
+    const { existsSync, readFileSync, statSync } = await import('fs');
+    const path = await import('path');
+    const repoRoot = process.cwd();
+    const fixturePath = path.join(repoRoot, 'test/fixtures/whoknows-eval.jsonl');
+    if (!existsSync(fixturePath)) {
+      return {
+        name: 'whoknows_health',
+        status: 'warn',
+        message: `whoknows eval fixture missing at test/fixtures/whoknows-eval.jsonl. Fix: hand-label 10 queries you'd actually run, format {query, expected_top_3_slugs, notes}.`,
+      };
+    }
+    const stat = statSync(fixturePath);
+    if (stat.size === 0) {
+      return {
+        name: 'whoknows_health',
+        status: 'warn',
+        message: 'whoknows eval fixture exists but is empty. The eval cannot pass without queries.',
+      };
+    }
+    const raw = readFileSync(fixturePath, 'utf-8');
+    const rows = raw
+      .split('\n')
+      .filter((l) => {
+        const t = l.trim();
+        return t && !t.startsWith('#') && !t.startsWith('//');
+      });
+    if (rows.length < 5) {
+      return {
+        name: 'whoknows_health',
+        status: 'warn',
+        message: `whoknows eval fixture has only ${rows.length} row(s); ENG-D2 recommends 10. Fix: add more hand-labeled queries.`,
+      };
+    }
+    return {
+      name: 'whoknows_health',
+      status: 'ok',
+      message: `whoknows eval fixture present (${rows.length} queries). Run \`gbrain eval whoknows test/fixtures/whoknows-eval.jsonl\` to grade.`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      name: 'whoknows_health',
+      status: 'warn',
+      message: `Could not check whoknows fixture: ${msg}`,
+    };
+  }
+}
+
 export async function takesWeightGridCheck(engine: BrainEngine): Promise<Check> {
   try {
     const rows = await engine.executeRaw<{ off_grid: string | number; total: string | number }>(
@@ -347,7 +407,99 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
   // 6. Sync freshness check
   checks.push(await checkSyncFreshness(engine));
 
+  // 7. v0.32.3 search-lite mode + per-key drift surface.
+  checks.push(await checkSearchMode(engine));
+
+  // 8. v0.32.3 eval_drift: retrieval-affecting files changed since last
+  // eval run? Non-blocking — surfaces as ok + hint.
+  checks.push(await checkEvalDrift(engine));
+
   return computeDoctorReport(checks);
+}
+
+/**
+ * v0.32.3 [CDX-20]: surface mode + per-key override drift.
+ *
+ * Status stays `ok` (never warns; never docks health score). If
+ * search.mode is unset → suggest picking one. If overrides contradict
+ * the mode (e.g. mode=conservative but cache.enabled=false), say so in
+ * the message and paste a `gbrain search modes --reset` fix command.
+ */
+export async function checkSearchMode(engine: BrainEngine): Promise<Check> {
+  try {
+    const mode = await engine.getConfig('search.mode');
+    const overrides = await engine.listConfigKeys('search.');
+    // Exclude search.mode itself + the upgrade-notice state key from the
+    // override roster — they aren't knobs.
+    const overrideKeys = overrides.filter(k => k !== 'search.mode' && k !== 'search.mode_upgrade_notice_shown');
+
+    if (!mode) {
+      return {
+        name: 'search_mode',
+        status: 'ok',
+        message: 'search.mode is unset (using balanced fallback). Run `gbrain search modes` to see what is running and pick a mode explicitly.',
+      };
+    }
+
+    if (overrideKeys.length === 0) {
+      return {
+        name: 'search_mode',
+        status: 'ok',
+        message: `Mode: ${mode} (no per-key overrides — mode bundle is canonical).`,
+      };
+    }
+
+    return {
+      name: 'search_mode',
+      status: 'ok',
+      message: `Mode: ${mode} with ${overrideKeys.length} per-key override(s) (${overrideKeys.join(', ')}). To consolidate to the pure mode bundle: gbrain search modes --reset`,
+    };
+  } catch (e) {
+    return {
+      name: 'search_mode',
+      status: 'ok',
+      message: `Could not read search mode config (${(e as Error).message ?? 'unknown'}).`,
+    };
+  }
+}
+
+/**
+ * v0.32.3 [CDX-6]: surface when retrieval-affecting files have changed
+ * since the most recent published eval. Curated watch-list in
+ * src/core/eval/drift-watch.ts; additions to that list require a
+ * CHANGELOG line.
+ *
+ * Status stays `ok` — operator-facing reminder, not a hard gate.
+ */
+export async function checkEvalDrift(engine: BrainEngine): Promise<Check> {
+  try {
+    const { watchedFilesDrifted } = await import('../core/eval/drift-watch.ts');
+    // Working tree vs HEAD (uncommitted retrieval changes). The fuller
+    // version (vs the commit of the last published eval) is wired when
+    // eval_results lands; today we just probe for uncommitted retrieval
+    // changes so the operator sees them before re-running evals.
+    const repoRoot = process.cwd();
+    const drifted = watchedFilesDrifted(repoRoot);
+    if (drifted.length === 0) {
+      return {
+        name: 'eval_drift',
+        status: 'ok',
+        message: 'No retrieval-affecting files changed in working tree.',
+      };
+    }
+    const summary = drifted.slice(0, 3).join(', ') + (drifted.length > 3 ? ', …' : '');
+    return {
+      name: 'eval_drift',
+      status: 'ok',
+      message: `${drifted.length} retrieval-affecting file(s) changed since HEAD: ${summary}. Re-run \`gbrain eval run-all\` after committing these changes.`,
+    };
+  } catch (e) {
+    return {
+      name: 'eval_drift',
+      status: 'ok',
+      message: `Could not probe retrieval drift (${(e as Error).message ?? 'unknown'}).`,
+    };
+  }
 }
 
 /**
@@ -1511,6 +1663,12 @@ export async function runDoctor(engine: BrainEngine | null, args: string[], dbSo
   progress.heartbeat('takes_weight_grid');
   checks.push(await takesWeightGridCheck(engine));
 
+  // v0.33: whoknows_health — fixture presence + row count. The eval
+  // gate itself runs via `gbrain eval whoknows`; this check is the
+  // "did you do the assignment?" signal.
+  progress.heartbeat('whoknows_health');
+  checks.push(await whoknowsHealthCheck(engine));
+
   // 11. Markdown body completeness (v0.12.3 reliability wave).
   // v0.12.0's splitBody ate everything after the first `---` horizontal rule,
   // truncating wiki-style pages. Heuristic: pages whose body is <30% of the
@@ -2253,6 +2411,15 @@ export async function runDoctor(engine: BrainEngine | null, args: string[], dbSo
   if (engine !== null) {
     progress.heartbeat('sync_freshness');
     checks.push(await checkSyncFreshness(engine));
+  }
+
+  // v0.32.3 search-lite — mode + eval_drift surfaces. Status stays 'ok' per
+  // [CDX-20]; hint lives in `message`.
+  if (engine !== null) {
+    progress.heartbeat('search_mode');
+    checks.push(await checkSearchMode(engine));
+    progress.heartbeat('eval_drift');
+    checks.push(await checkEvalDrift(engine));
   }
 
   progress.finish();

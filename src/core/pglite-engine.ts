@@ -771,6 +771,11 @@ export class PGLiteEngine implements BrainEngine {
       params.push(opts.symbolKind);
       extraFilter += ` AND cc.symbol_type = $${params.length}`;
     }
+    // v0.33: multi-type filter for whoknows.
+    if (opts?.types && opts.types.length > 0) {
+      params.push(opts.types);
+      extraFilter += ` AND p.type = ANY($${params.length}::text[])`;
+    }
     // v0.29.1 — since/until date filter (Postgres parity, codex pass-1 #10).
     // Reads against COALESCE(effective_date, updated_at) so date filtering
     // matches user intent (a meeting was on its event_date, not when it
@@ -1059,6 +1064,13 @@ export class PGLiteEngine implements BrainEngine {
     if (opts?.symbolKind) {
       params.push(opts.symbolKind);
       extraFilter += ` AND cc.symbol_type = $${params.length}`;
+    }
+    // v0.33: multi-type filter for whoknows. Applied inside HNSW candidate
+    // CTE so the candidate pool consists only of typed pages — limit budget
+    // goes to person/company pages instead of being eaten by other types.
+    if (opts?.types && opts.types.length > 0) {
+      params.push(opts.types);
+      extraFilter += ` AND p.type = ANY($${params.length}::text[])`;
     }
     // v0.29.1 since/until parity (codex pass-1 #10). Filter applied INSIDE
     // the inner CTE so HNSW's candidate pool already excludes out-of-range
@@ -3137,6 +3149,24 @@ export class PGLiteEngine implements BrainEngine {
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
       [key, value]
     );
+  }
+
+  async unsetConfig(key: string): Promise<number> {
+    const { affectedRows } = await this.db.query(
+      'DELETE FROM config WHERE key = $1',
+      [key],
+    ) as { affectedRows?: number };
+    return affectedRows ?? 0;
+  }
+
+  async listConfigKeys(prefix: string): Promise<string[]> {
+    // LIKE-escape the prefix so a user-supplied % or _ doesn't act as a wildcard.
+    const escaped = prefix.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const { rows } = await this.db.query(
+      `SELECT key FROM config WHERE key LIKE $1 || '%' ESCAPE '\\' ORDER BY key`,
+      [escaped],
+    );
+    return (rows as { key: string }[]).map(r => r.key);
   }
 
   // Migration support
