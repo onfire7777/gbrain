@@ -14,6 +14,10 @@ export const google: Recipe = {
       models: ['gemini-embedding-001'],
       default_dims: 768,
       dims_options: [768, 1536, 3072],
+      // Conservative local pre-split cap so large memory ingestion jobs do not
+      // rely only on recursive retry after a provider-side batch rejection.
+      max_batch_tokens: 8192,
+      chars_per_token: 4,
       cost_per_1m_tokens_usd: 0.15,
       price_last_verified: '2026-04-20',
     },

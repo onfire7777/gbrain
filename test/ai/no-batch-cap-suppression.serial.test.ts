@@ -4,7 +4,7 @@
  * Coverage:
  *  - Recipes with `embedding.no_batch_cap: true` suppress the
  *    missing-max_batch_tokens startup warning (#779)
- *  - Real-provider recipes without the flag still warn (regression guard)
+ *  - Real-provider recipes either declare explicit caps or consciously opt out
  *  - listRecipes returns expected dynamic-cap recipes (ollama, litellm,
  *    llama-server) all flagged
  */
@@ -52,15 +52,15 @@ describe('v0.32 #779: no_batch_cap suppresses the missing-max_batch_tokens warni
     }
   });
 
-  test('configureGateway STILL warns for google (real provider, no cap declared)', () => {
+  test('configureGateway does NOT warn for google after explicit batch cap', () => {
     warnSpy.mockClear();
     resetGateway();
     configureGateway({ env: {} });
     const messages = warnSpy.mock.calls.map(c => String(c[0] ?? ''));
     expect(
       messages.some(m => m.includes('"google"') && m.includes('without max_batch_tokens')),
-      'google should warn (it has fixed-cap models)',
-    ).toBe(true);
+      'google should declare explicit batch metadata instead of warning',
+    ).toBe(false);
   });
 
   test('every recipe with empty models[] declares user_provided_models OR has openai-fast-path', () => {
