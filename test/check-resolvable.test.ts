@@ -318,6 +318,28 @@ function makeSkillsFixture(files: Record<string, string>): string {
   return dir;
 }
 
+describe("checkResolvable — frontmatter trigger parsing", () => {
+  let dir: string;
+  afterEachCleanup(() => dir && rmSync(dir, { recursive: true, force: true }));
+
+  test("accepts CRLF frontmatter from Windows checkouts", () => {
+    dir = mkdtempSync(join(tmpdir(), "gbrain-crlf-"));
+    mkdirSync(join(dir, "win"), { recursive: true });
+    writeFileSync(join(dir, "RESOLVER.md"), "## Test\r\n| Trigger | Skill |\r\n|-----|-----|\r\n| \"windows\" | `skills/win/SKILL.md` |\r\n");
+    writeFileSync(
+      join(dir, "manifest.json"),
+      JSON.stringify({ skills: [{ name: "win", path: "win/SKILL.md" }] }, null, 2)
+    );
+    writeFileSync(
+      join(dir, "win", "SKILL.md"),
+      "---\r\nname: win\r\ndescription: test\r\ntriggers:\r\n  - \"windows\"\r\n---\r\n# Windows\r\n"
+    );
+
+    const report = checkResolvable(dir);
+    expect(report.issues.filter(i => i.type === "mece_gap")).toEqual([]);
+  });
+});
+
 describe("extractDelegationTargets", () => {
   test("parses > **Convention:** callouts", () => {
     const refs = extractDelegationTargets(

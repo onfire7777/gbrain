@@ -229,14 +229,14 @@ export function parseResolverEntries(resolverContent: string): ResolverEntry[] {
  */
 export function extractTriggers(skillContent: string): string[] {
   const content = skillContent.replace(/\r\n/g, '\n');
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  const fmMatch = content.match(/^\uFEFF?---\n([\s\S]*?)\n---(?:\n|$)/);
   if (!fmMatch) return [];
   const fm = fmMatch[1];
-  const triggersMatch = fm.match(/^triggers:\s*\n((?:\s+-\s+.+\n?)*)/m);
+  const triggersMatch = fm.match(/^triggers:\s*\r?\n((?:[ \t]*-\s+.+(?:\r?\n|$))*)/m);
   if (!triggersMatch) return [];
   return triggersMatch[1]
-    .split('\n')
-    .map(l => l.replace(/^\s+-\s+/, '').replace(/^["']|["']$/g, '').trim())
+    .split(/\r?\n/)
+    .map(l => l.replace(/^[ \t]*-\s+/, '').replace(/^["']|["']$/g, '').trim())
     .filter(Boolean);
 }
 

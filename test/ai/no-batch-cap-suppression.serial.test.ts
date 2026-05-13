@@ -4,7 +4,7 @@
  * Coverage:
  *  - Recipes with `embedding.no_batch_cap: true` suppress the
  *    missing-max_batch_tokens startup warning (#779)
- *  - Real-provider recipes without the flag still warn (regression guard)
+ *  - Real-provider recipes either declare explicit caps or consciously opt out
  *  - listRecipes returns expected dynamic-cap recipes (ollama, litellm,
  *    llama-server) all flagged
  */
@@ -101,7 +101,6 @@ describe('v0.32 #779: no_batch_cap suppresses the missing-max_batch_tokens warni
     // so configuring it must NOT trip the missing-cap warning.
     const r = getRecipe('google');
     expect(r?.touchpoints.embedding?.max_batch_tokens).toBeGreaterThan(0);
-
     warnSpy.mockClear();
     resetGateway();
     configureGateway({ env: {} });
