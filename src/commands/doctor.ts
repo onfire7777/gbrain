@@ -5842,7 +5842,10 @@ export async function buildChecks(
       ];
       checks.push({
         name: 'brain_score',
-        status: health.brain_score >= 70 ? 'ok' : 'warn',
+        // Weighted brain_score is a composition signal, not an operational
+        // doctor-health gate. Keep the score visible in the message while
+        // letting brain_checks_score/category_scores carry health status.
+        status: 'ok',
         message: `Brain score ${health.brain_score}/100 (${parts.join(', ')})`,
       });
     } else {
