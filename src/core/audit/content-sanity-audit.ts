@@ -179,6 +179,15 @@ export interface ContentSanitySummary {
   top_patterns: Array<{ name: string; count: number }>;
 }
 
+export function statusForContentSanitySummary(summary: ContentSanitySummary): 'ok' | 'warn' | 'fail' {
+  const hardBlocked =
+    summary.by_type.hard_block + summary.by_type.reject + summary.by_type.quarantine;
+  const softBlocked = summary.by_type.soft_block + summary.by_type.flag;
+  if (hardBlocked > 0) return 'fail';
+  if (softBlocked > 0) return 'warn';
+  return 'ok';
+}
+
 export function summarizeContentSanityEvents(
   events: ReadonlyArray<ContentSanityAuditEvent>,
 ): ContentSanitySummary {

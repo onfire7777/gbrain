@@ -6343,7 +6343,11 @@ export async function buildChecks(
 
   progress.heartbeat('content_sanity_audit_recent');
   try {
-    const { readRecentContentSanityEvents, summarizeContentSanityEvents } =
+    const {
+      readRecentContentSanityEvents,
+      summarizeContentSanityEvents,
+      statusForContentSanitySummary,
+    } =
       await import('../core/audit/content-sanity-audit.ts');
     const events = readRecentContentSanityEvents(7);
     if (events.length === 0) {
@@ -6364,8 +6368,8 @@ export async function buildChecks(
       // source can legitimately emit many WARN events (oversize/markup-heavy)
       // while remaining searchable and intentionally flagged. Fail on hard
       // dispositions (content actually blocked or hidden); warn on soft
-      // dispositions or volume. This keeps doctor from treating expected
-      // code-corpus telemetry as an unhealthy brain.
+      // dispositions. Warn-only audit volume stays visible in the message but
+      // does not make doctor unhealthy.
       //
       // v0.42 renamed the hard path: a rejected page emits `reject` and a
       // quarantined (hidden) junk page emits `quarantine`; `hard_block` is now
@@ -6376,9 +6380,7 @@ export async function buildChecks(
       const hardBlocked =
         summary.by_type.hard_block + summary.by_type.reject + summary.by_type.quarantine;
       const softBlocked = summary.by_type.soft_block + summary.by_type.flag;
-      const status: 'ok' | 'warn' | 'fail' =
-        hardBlocked > 0 ? 'fail' :
-          (softBlocked > 0 || events.length >= 10) ? 'warn' : 'ok';
+      const status = statusForContentSanitySummary(summary);
       checks.push({
         name: 'content_sanity_audit_recent',
         status,

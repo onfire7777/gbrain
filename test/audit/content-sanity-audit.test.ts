@@ -7,6 +7,7 @@ import {
   logContentSanityAssessment,
   readRecentContentSanityEvents,
   summarizeContentSanityEvents,
+  statusForContentSanitySummary,
   computeContentSanityAuditFilename,
   type ContentSanityAuditEvent,
 } from '../../src/core/audit/content-sanity-audit.ts';
@@ -224,5 +225,31 @@ describe('summarizeContentSanityEvents', () => {
     ]);
     expect(s.top_patterns).toContainEqual({ name: 'reddit_blocked', count: 2 });
     expect(s.top_patterns).toContainEqual({ name: 'linkedin_wall', count: 1 });
+  });
+
+  test('doctor status treats warn-only audit volume as ok', () => {
+    const s = summarizeContentSanityEvents(Array.from({ length: 25 }, () => event({ event_type: 'warn' })));
+    expect(statusForContentSanitySummary(s)).toBe('ok');
+  });
+
+  test('doctor status warns on soft dispositions', () => {
+    expect(statusForContentSanitySummary(summarizeContentSanityEvents([
+      event({ event_type: 'soft_block' }),
+    ]))).toBe('warn');
+    expect(statusForContentSanitySummary(summarizeContentSanityEvents([
+      event({ event_type: 'flag' }),
+    ]))).toBe('warn');
+  });
+
+  test('doctor status fails on hard dispositions', () => {
+    expect(statusForContentSanitySummary(summarizeContentSanityEvents([
+      event({ event_type: 'hard_block' }),
+    ]))).toBe('fail');
+    expect(statusForContentSanitySummary(summarizeContentSanityEvents([
+      event({ event_type: 'reject' }),
+    ]))).toBe('fail');
+    expect(statusForContentSanitySummary(summarizeContentSanityEvents([
+      event({ event_type: 'quarantine' }),
+    ]))).toBe('fail');
   });
 });
