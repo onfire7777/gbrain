@@ -9,12 +9,16 @@
  */
 
 import { describe, test, expect } from 'bun:test';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join, relative } from 'path';
 import {
   isSyncable,
   unsyncableReason,
   SYNC_SKIP_FILES,
   type SyncableReason,
 } from '../src/core/sync.ts';
+import { collectSyncableFiles } from '../src/commands/import.ts';
 
 describe('#1433 — isSyncable / unsyncableReason are duals of one classifier', () => {
   const cases: Array<{ path: string; expected: SyncableReason | null; note: string }> = [
@@ -25,6 +29,8 @@ describe('#1433 — isSyncable / unsyncableReason are duals of one classifier', 
     { path: 'index.md', expected: 'metafile', note: 'top-level index.md' },
     { path: 'README.md', expected: 'metafile', note: 'top-level README' },
     { path: 'docs/README.md', expected: 'metafile', note: 'nested README' },
+    { path: 'CHANGELOG.md', expected: 'metafile', note: 'top-level changelog' },
+    { path: 'packages/foo/CHANGELOG.md', expected: 'metafile', note: 'nested changelog' },
     { path: 'people/alice.txt', expected: 'strategy', note: '.txt rejected by markdown strategy' },
     { path: 'ops/scratch/note.md', expected: 'pruned-dir', note: 'ops/ is pruned' },
     { path: '.git/notes.md', expected: 'pruned-dir', note: 'hidden dir pruned' },
@@ -50,13 +56,26 @@ describe('#1433 — isSyncable / unsyncableReason are duals of one classifier', 
     expect(isSyncable('drafts/wip.md', { exclude: ['drafts/**'] })).toBe(false);
   });
 
-  test('SYNC_SKIP_FILES export contains the canonical four basenames', () => {
-    expect([...SYNC_SKIP_FILES]).toEqual(['schema.md', 'index.md', 'log.md', 'README.md']);
+  test('SYNC_SKIP_FILES export contains the canonical metafile basenames', () => {
+    expect([...SYNC_SKIP_FILES]).toEqual(['schema.md', 'index.md', 'log.md', 'README.md', 'CHANGELOG.md']);
   });
 
   test('isSyncable(p) === (unsyncableReason(p) === null) — duality holds for all canonical cases', () => {
     for (const c of cases) {
       expect(isSyncable(c.path)).toBe(unsyncableReason(c.path) === null);
     }
+  });
+
+  test('full-import walker applies the same metafile policy', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gbrain-sync-shape-'));
+    mkdirSync(join(dir, 'docs'), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'guide.md'), '# Guide\n');
+    writeFileSync(join(dir, 'CHANGELOG.md'), '# Changelog\n');
+    writeFileSync(join(dir, 'docs', 'README.md'), '# Docs\n');
+
+    const rels = collectSyncableFiles(dir, { strategy: 'markdown' })
+      .map(p => relative(dir, p));
+
+    expect(rels).toEqual(['docs/guide.md']);
   });
 });

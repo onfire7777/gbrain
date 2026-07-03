@@ -8,9 +8,8 @@ import { loadConfig, gbrainPath } from '../core/config.ts';
 import { createProgress } from '../core/progress.ts';
 import { getCliOptions, cliOptsToProgressOptions } from '../core/cli-options.ts';
 import {
-  isCodeFilePath,
-  isMarkdownFilePath,
   isImageFilePath as isImageFilePathFromSync,
+  isSyncable,
   pruneDir,
   type SyncStrategy,
 } from '../core/sync.ts';
@@ -489,10 +488,14 @@ interface CollectOpts {
 
 /**
  * v0.27.1 + v0.31.2: walker-context image admission. `isSyncable` (the
- * incremental-diff filter at sync.ts:213) admits images only on `auto`.
+ * incremental-diff filter) admits images only on `auto`.
  * The first-sync walker historically admitted them on markdown too when
  * `GBRAIN_EMBEDDING_MULTIMODAL=true`. Codex (C5) flagged the contradiction
  * — preserve the walker semantic explicitly.
+ *
+ * All markdown/code paths still route through `isSyncable` so metafile
+ * policy (`README.md`, `CHANGELOG.md`, etc.) cannot drift between
+ * incremental sync and full-import walkers.
  */
 function isCollectibleForWalker(
   path: string,
@@ -501,15 +504,12 @@ function isCollectibleForWalker(
 ): boolean {
   switch (strategy) {
     case 'code':
-      return isCodeFilePath(path);
+      return isSyncable(path, { strategy: 'code' });
     case 'markdown':
-      return isMarkdownFilePath(path) || (multimodalOn && isImageFilePathFromSync(path));
+      return isSyncable(path, { strategy: 'markdown' }) ||
+        (multimodalOn && isImageFilePathFromSync(path) && isSyncable(path, { strategy: 'auto' }));
     case 'auto':
-      return (
-        isMarkdownFilePath(path) ||
-        isCodeFilePath(path) ||
-        (multimodalOn && isImageFilePathFromSync(path))
-      );
+      return isSyncable(path, { strategy: 'auto' });
   }
 }
 

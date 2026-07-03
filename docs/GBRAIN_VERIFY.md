@@ -81,6 +81,7 @@ find /data/brain -name '*.md' \
   -not -name 'index.md' \
   -not -name 'schema.md' \
   -not -name 'log.md' \
+  -not -name 'CHANGELOG.md' \
   | wc -l
 ```
 

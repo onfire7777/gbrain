@@ -1878,22 +1878,24 @@ async function performSyncInner(engine: BrainEngine, opts: SyncOpts): Promise<Sy
   // delete the page. That's the same pre-fix behavior — removing the
   // page requires `gbrain pages purge-deleted` or a direct MCP delete.
   // Filed as v0.42+ follow-up for a `gbrain pages remove <slug>` surface.
-  const unsyncableModified = manifest.modified.filter(p => !isSyncable(p, syncOpts));
-  // v0.18.0+ multi-source: scope getPage + deletePage to opts.sourceId so
-  // unsyncable cleanup in source A doesn't accidentally sweep same-slug
-  // pages in sources B/C/D.
-  const pageOpts = opts.sourceId ? { sourceId: opts.sourceId } : undefined;
-  for (const path of unsyncableModified) {
-    // v0.41.13 #1433: never delete on metafile classification.
-    if (unsyncableReason(path, syncOpts) === 'metafile') continue;
-    const slug = await resolveSlugByPathOrSourcePath(engine, path, opts.sourceId);
-    try {
-      const existing = await engine.getPage(slug, pageOpts);
-      if (existing) {
-        await engine.deletePage(slug, pageOpts);
-        slog(`  Deleted un-syncable page: ${slug}`);
-      }
-    } catch { /* ignore */ }
+  if (!opts.dryRun) {
+    const unsyncableModified = manifest.modified.filter(p => !isSyncable(p, syncOpts));
+    // v0.18.0+ multi-source: scope getPage + deletePage to opts.sourceId so
+    // unsyncable cleanup in source A doesn't accidentally sweep same-slug
+    // pages in sources B/C/D.
+    const pageOpts = opts.sourceId ? { sourceId: opts.sourceId } : undefined;
+    for (const path of unsyncableModified) {
+      // v0.41.13 #1433: never delete on metafile classification.
+      if (unsyncableReason(path, syncOpts) === 'metafile') continue;
+      const slug = await resolveSlugByPathOrSourcePath(engine, path, opts.sourceId);
+      try {
+        const existing = await engine.getPage(slug, pageOpts);
+        if (existing) {
+          await engine.deletePage(slug, pageOpts);
+          slog(`  Deleted un-syncable page: ${slug}`);
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   const totalChanges = filtered.added.length + filtered.modified.length +
