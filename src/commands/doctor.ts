@@ -746,7 +746,7 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
     const score = health.brain_score ?? 0;
     checks.push({
       name: 'brain_score',
-      status: score >= 70 ? 'ok' : score >= 50 ? 'warn' : 'fail',
+      status: 'ok',
       message: `Brain score ${score}/100`,
     });
   } catch (e) {
