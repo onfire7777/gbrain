@@ -7136,11 +7136,24 @@ export async function buildChecks(
     const bytesBlock = _cfg?.content_sanity?.bytes_block ?? 500_000;
     const rows = await sql`
       SELECT p.slug, p.source_id,
-             octet_length(p.compiled_truth) + octet_length(COALESCE(p.timeline, '')) AS bytes
+             octet_length(p.compiled_truth) + octet_length(COALESCE(p.timeline, '')) AS bytes,
+             COALESCE(ch.chunk_count, 0) AS chunk_count,
+             COALESCE(ch.embedded_count, 0) AS embedded_count
       FROM pages p
+      LEFT JOIN LATERAL (
+        SELECT count(*) AS chunk_count,
+               sum(CASE WHEN cc.embedding IS NOT NULL THEN 1 ELSE 0 END) AS embedded_count
+        FROM content_chunks cc
+        WHERE cc.page_id = p.id
+      ) ch ON true
       WHERE p.deleted_at IS NULL
         AND NOT (COALESCE(p.frontmatter, '{}'::jsonb) ? 'embed_skip')
         AND (octet_length(p.compiled_truth) + octet_length(COALESCE(p.timeline, ''))) > ${bytesBlock}
+        AND NOT (
+          p.type = 'code'
+          AND COALESCE(ch.chunk_count, 0) > 0
+          AND COALESCE(ch.chunk_count, 0) = COALESCE(ch.embedded_count, 0)
+        )
       ORDER BY bytes DESC
       LIMIT 100
     `;
