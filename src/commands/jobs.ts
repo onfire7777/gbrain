@@ -1328,7 +1328,10 @@ HANDLER TYPES (built in)
         const childArgs = process.argv.slice(2).filter(a => a !== '--detach');
         const child = spawn(process.execPath, [process.argv[1], ...childArgs], {
           detached: true,
-          stdio: ['ignore', 'ignore', 'inherit'],
+          // Detached supervisors must not inherit transient agent pipes. In
+          // noninteractive launchers the parent exits immediately and those
+          // descriptors can close under the child before it records failures.
+          stdio: ['ignore', 'ignore', 'ignore'],
           env: process.env,
         });
         child.unref();
