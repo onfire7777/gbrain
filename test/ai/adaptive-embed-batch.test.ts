@@ -242,6 +242,10 @@ describe('isTokenLimitError (pure helper)', () => {
     expect(isTokenLimitError(new Error('Exceeded 300000 max tokens per request'))).toBe(true);
   });
 
+  test('matches Ollama context length phrasing', () => {
+    expect(isTokenLimitError(new Error('input length exceeds context length'))).toBe(true);
+  });
+
   test('does not match unrelated errors', () => {
     expect(isTokenLimitError(new Error('Connection refused'))).toBe(false);
     expect(isTokenLimitError(new Error('Invalid API key'))).toBe(false);
@@ -305,7 +309,7 @@ describe('embed() recursion via stubbed transport', () => {
     expect(slotZero).toEqual([0, 1, 2, 3, 4, 0, 1, 2, 3, 4]);
   });
 
-  test('terminal case: single text always fails → normalizes and throws (no infinite loop)', async () => {
+  test('terminal case: single tiny text always fails -> normalizes and throws', async () => {
     configureVoyage();
 
     const stub = mock(async () => { throw VOYAGE_TOKEN_LIMIT_ERROR; });
@@ -313,15 +317,32 @@ describe('embed() recursion via stubbed transport', () => {
 
     let caught: unknown = null;
     try {
-      await embed(['just one text']);
+      await embed(['tiny']);
     } catch (e) {
       caught = e;
     }
     expect(caught).not.toBeNull();
     expect(caught instanceof AIConfigError || caught instanceof AITransientError).toBe(true);
-    // Stub fires once for the single-element batch; cannot halve further so
-    // the recursion gives up at MIN_SUB_BATCH=1 and rethrows.
+    // Tiny inputs cannot be shortened below the single-input retry floor, so
+    // the recursion gives up without spinning.
     expect(stub).toHaveBeenCalledTimes(1);
+  });
+
+  test('retries an oversized single text at shorter lengths', async () => {
+    configureOpenAI();
+
+    const stub = mock(async ({ values }: { values: string[] }) => {
+      if ((values[0]?.length ?? 0) > 2000) throw new Error('input length exceeds context length');
+      return fakeEmbeddings(values, 1536);
+    });
+    __setEmbedTransportForTests(stub as any);
+
+    const result = await embed(['x'.repeat(8000)]);
+
+    expect(result).toHaveLength(1);
+    expect(stub).toHaveBeenCalledTimes(3);
+    const callLengths = stub.mock.calls.map(([arg]) => (arg as { values: string[] }).values[0].length);
+    expect(callLengths).toEqual([8000, 4000, 2000]);
   });
 });
 

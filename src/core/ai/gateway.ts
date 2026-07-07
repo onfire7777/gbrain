@@ -1593,6 +1593,8 @@ function instantiateEmbedding(recipe: Recipe, modelId: string, cfg: AIGatewayCon
 
 /** Minimum sub-batch size before we give up splitting and just throw. */
 const MIN_SUB_BATCH = 1;
+/** Smallest single-input retry after a provider rejects one oversized text. */
+const MIN_SINGLE_TEXT_CHARS = 256;
 
 /**
  * Embed many texts. Truncates to MAX_CHARS, then dispatches based on whether
@@ -1623,6 +1625,8 @@ const MIN_SUB_BATCH = 1;
  *               halve at mid=⌈N/2⌉
  *               embedSubBatch(left)  ──┐
  *               embedSubBatch(right) ──┴─ concat in order, return
+ *         if isTokenLimitError(err) AND texts.length == 1:
+ *               retry the single input at half length down to MIN_SINGLE_TEXT_CHARS
  *         else:
  *               throw normalizeAIError(err, ...)
  * ```
@@ -1850,7 +1854,9 @@ export function isTokenLimitError(err: unknown): boolean {
     /token.*limit.*exceeded/i.test(msg) ||
     // OpenAI embeddings: "Invalid 'input': maximum request size is 300000 tokens per request."
     /maximum request size.*tokens/i.test(msg) ||
-    /max.*tokens.*per.*request/i.test(msg)
+    /max.*tokens.*per.*request/i.test(msg) ||
+    // Ollama / llama.cpp embedding servers: one input exceeded the model ctx.
+    /input length exceeds.*context length/i.test(msg)
   );
 }
 
@@ -1965,6 +1971,14 @@ async function embedSubBatch(
       const left = await embedSubBatch(texts.slice(0, mid), model, providerOpts, expectedDims, recipe, modelId, opts);
       const right = await embedSubBatch(texts.slice(mid), model, providerOpts, expectedDims, recipe, modelId, opts);
       return [...left, ...right];
+    }
+    if (isTokenLimitError(err) && texts.length === 1) {
+      shrinkOnMiss(recipe);
+      const text = texts[0] ?? '';
+      const nextLen = Math.max(MIN_SINGLE_TEXT_CHARS, Math.floor(text.length / 2));
+      if (nextLen < text.length) {
+        return embedSubBatch([text.slice(0, nextLen)], model, providerOpts, expectedDims, recipe, modelId, opts);
+      }
     }
     throw normalizeAIError(err, `embed(${recipe.id}:${modelId})`);
   }
