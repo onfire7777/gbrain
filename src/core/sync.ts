@@ -340,7 +340,7 @@ export type SyncableReason =
  * It was the lone structural sibling missing from this list, so it leaked
  * into the index as a content page (slug `resolver`).
  */
-export const SYNC_SKIP_FILES = ['schema.md', 'index.md', 'log.md', 'README.md', 'RESOLVER.md'] as const;
+export const SYNC_SKIP_FILES = ['schema.md', 'index.md', 'log.md', 'README.md', 'RESOLVER.md', 'CHANGELOG.md'] as const;
 
 /**
  * Internal classifier. Returns null when the path IS syncable, or a tagged

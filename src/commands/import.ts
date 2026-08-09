@@ -613,7 +613,8 @@ interface CollectOpts {
  * — preserve the walker semantic explicitly.
  *
  * Closes #345: exclude `SYNC_SKIP_FILES` metafiles
- * (`README.md` / `index.md` / `log.md` / `schema.md` / `RESOLVER.md`).
+ * (`README.md` / `index.md` / `log.md` / `schema.md` / `RESOLVER.md` /
+ * `CHANGELOG.md`).
  * Incremental `sync` skips these via `isSyncable`, but the bulk-import
  * walker only filtered by extension — so a directory import imported every
  * directory README as a page, titled by its folder ("People", "Companies",

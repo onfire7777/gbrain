@@ -1,6 +1,6 @@
 /**
  * Closes #345: the bulk-import walker must skip SYNC_SKIP_FILES metafiles
- * (README.md / index.md / log.md / schema.md / RESOLVER.md), the same way
+ * (README.md / index.md / log.md / schema.md / RESOLVER.md / CHANGELOG.md), the same way
  * incremental `sync` (isSyncable) does.
  *
  * Root cause this locks: a directory-import pass imported every directory
@@ -47,7 +47,7 @@ describe('collectSyncableFiles metafile exclusion (closes #345)', () => {
     seed();
     const got = collectSyncableFiles(tmp).map(f => basename(f));
     expect(got).toContain('example-person.md');
-    for (const meta of ['README.md', 'index.md', 'log.md', 'schema.md', 'RESOLVER.md']) {
+    for (const meta of ['README.md', 'index.md', 'log.md', 'schema.md', 'RESOLVER.md', 'CHANGELOG.md']) {
       expect(got).not.toContain(meta);
     }
   });
