@@ -43,6 +43,7 @@
  *        through arbitrary source names (D13).
  */
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'fs';
 import {
   resolveParallelism,
   buildSyncStatusReport,
@@ -50,6 +51,20 @@ import {
 import { SYNC_LOCK_ID, syncLockId } from '../src/core/db-lock.ts';
 import { withSourcePrefix, slog } from '../src/core/console-prefix.ts';
 import type { BrainEngine } from '../src/core/engine.ts';
+
+test('sync --all excludes archived sources from fan-out', () => {
+  const source = readFileSync(new URL('../src/commands/sync.ts', import.meta.url), 'utf8');
+  expect(source).toMatch(
+    /FROM sources WHERE local_path IS NOT NULL AND archived = false/,
+  );
+});
+
+test('sync --all wires --parallel through the canonical resolver', () => {
+  const source = readFileSync(new URL('../src/commands/sync.ts', import.meta.url), 'utf8');
+  expect(source).toMatch(
+    /resolveParallelism\(\{\s*sourceCount: runnableSources\.length,\s*explicitParallel: parallelOverride,/,
+  );
+});
 
 // ── resolveParallelism ──────────────────────────────────────────────
 

@@ -4534,7 +4534,7 @@ See also:
     // Both columns predate v0.41 (writeSyncAnchor / writeChunkerVersion); no
     // schema migration needed.
     const sources = await engine.executeRaw<{ id: string; name: string; local_path: string | null; config: Record<string, unknown>; last_commit: string | null; chunker_version: string | null }>(
-      `SELECT id, name, local_path, config, last_commit, chunker_version FROM sources WHERE local_path IS NOT NULL`,
+      `SELECT id, name, local_path, config, last_commit, chunker_version FROM sources WHERE local_path IS NOT NULL AND archived = false`,
     );
     if (!sources || sources.length === 0) {
       console.log('No sources with local_path configured. Use `gbrain sources add <id> --path <path>` first.');
@@ -4753,8 +4753,15 @@ See also:
       return result;
     };
 
+    const resolvedParallel = resolveParallelism({
+      sourceCount: runnableSources.length,
+      explicitParallel: parallelOverride,
+      workers: concurrency,
+      engineKind: engine.kind,
+    });
+    const requestedParallel = Math.min(resolvedParallel, maxSources ?? resolvedParallel);
     const parallelEligible =
-      v2Enabled && !serialFlag && engine.kind !== 'pglite' && runnableSources.length > 1;
+      v2Enabled && !serialFlag && engine.kind !== 'pglite' && requestedParallel > 1;
 
     // v0.42.42.0 (#2139, D13C): the v0.40.6.0 (D15) refusal of --skip-failed /
     // --retry-failed under parallel sync is LIFTED. It existed because the
@@ -4767,9 +4774,7 @@ See also:
     // Effective parallelism — surfaced in the --json envelope so consumers
     // know how the run was actually dispatched. 1 in the serial fallback,
     // capped at min(sourceCount, --max-sources, 8) in the parallel path.
-    const effectiveParallel = parallelEligible
-      ? Math.min(runnableSources.length, maxSources ?? 8)
-      : 1;
+    const effectiveParallel = parallelEligible ? requestedParallel : 1;
 
     process.on('SIGINT', onAllSigint);
     try {
