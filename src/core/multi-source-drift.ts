@@ -34,11 +34,12 @@
 import { readdirSync, lstatSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import type { BrainEngine } from './engine.ts';
-import { pathToSlug } from './sync.ts';
+import { pathToSlug, type SyncStrategy } from './sync.ts';
 
 export interface SourceWithPath {
   id: string;
   local_path: string;
+  strategy?: SyncStrategy;
 }
 
 export interface MisroutedSample {
@@ -196,6 +197,10 @@ export async function findMisroutedPages(
   for (const src of sources) {
     if (src.id === 'default') continue;
     if (!src.local_path) continue;
+    // This diagnostic only probes markdown files. A code-only source sharing
+    // a repo with a markdown source does not own those files, so scanning it
+    // would report every legitimate markdown page as cross-source drift.
+    if (src.strategy === 'code') continue;
     if (Date.now() >= deadlineMs) {
       walkTruncated = true;
       break;

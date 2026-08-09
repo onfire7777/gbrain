@@ -829,14 +829,19 @@ export async function doctorReportRemote(engine: BrainEngine): Promise<DoctorRep
   // returned to the thin-client over MCP.
   try {
     const { findMisroutedPages } = await import('../core/multi-source-drift.ts');
-    const sources = await engine.executeRaw<{ id: string; local_path: string | null }>(
-      `SELECT id, local_path FROM sources`,
+    const { parseSourceConfig } = await import('../core/sources-load.ts');
+    const sources = await engine.executeRaw<{ id: string; local_path: string | null; config: unknown }>(
+      `SELECT id, local_path, config FROM sources`,
     );
     const nonDefaultWithPath = sources.filter(s => s.id !== 'default' && s.local_path);
     if (sources.length > 1 && nonDefaultWithPath.length > 0) {
       const result = await findMisroutedPages(
         engine,
-        nonDefaultWithPath.map(s => ({ id: s.id, local_path: s.local_path as string })),
+        nonDefaultWithPath.map(s => ({
+          id: s.id,
+          local_path: s.local_path as string,
+          strategy: parseSourceConfig(s.config).strategy as 'markdown' | 'code' | 'auto' | undefined,
+        })),
       );
       if (result.walk_truncated) {
         checks.push({
@@ -5952,14 +5957,19 @@ export async function buildChecks(
   // bail silently here when engine is null since the check needs DB access.
   if (engine !== null) try {
     const { findMisroutedPages } = await import('../core/multi-source-drift.ts');
-    const sources = await engine!.executeRaw<{ id: string; local_path: string | null }>(
-      `SELECT id, local_path FROM sources`,
+    const { parseSourceConfig } = await import('../core/sources-load.ts');
+    const sources = await engine!.executeRaw<{ id: string; local_path: string | null; config: unknown }>(
+      `SELECT id, local_path, config FROM sources`,
     );
     const nonDefaultWithPath = sources.filter(s => s.id !== 'default' && s.local_path);
     if (sources.length > 1 && nonDefaultWithPath.length > 0) {
       const result = await findMisroutedPages(
         engine!,
-        nonDefaultWithPath.map(s => ({ id: s.id, local_path: s.local_path as string })),
+        nonDefaultWithPath.map(s => ({
+          id: s.id,
+          local_path: s.local_path as string,
+          strategy: parseSourceConfig(s.config).strategy as 'markdown' | 'code' | 'auto' | undefined,
+        })),
       );
       if (result.walk_truncated) {
         checks.push({

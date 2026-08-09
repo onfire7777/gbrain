@@ -171,4 +171,20 @@ describe('findMisroutedPages — heuristic correctness', () => {
     expect(result.count).toBe(1);
     expect(result.sample[0].slug).toBe('topics/mdx-page');
   });
+
+  test('code-only sources do not report markdown pages as drift', async () => {
+    const root = makeTmpRoot('code-only');
+    seedFile(root, 'topics/code-source-note.md');
+    await engine.putPage('topics/code-source-note', {
+      type: 'concept',
+      title: 'Default note',
+      compiled_truth: '.',
+    });
+
+    const result = await findMisroutedPages(engine, [
+      { id: 'src-code-only', local_path: root, strategy: 'code' },
+    ]);
+
+    expect(result.count).toBe(0);
+  });
 });
