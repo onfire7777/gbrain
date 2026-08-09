@@ -15,7 +15,7 @@
  * __setEmbedTransportForTests). No API keys; embedding + reranker stubbed.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { PGLiteEngine } from '../../src/core/pglite-engine.ts';
 import { hybridSearch } from '../../src/core/search/hybrid.ts';
 import {
@@ -30,6 +30,8 @@ let engine: PGLiteEngine;
 
 const DIMS = 1536;
 const FAKE_EMB = Array.from({ length: DIMS }, (_, j) => (j === 0 ? 1 : 0.01));
+const savedEmbeddingModel = process.env.GBRAIN_EMBEDDING_MODEL;
+const savedEmbeddingDimensions = process.env.GBRAIN_EMBEDDING_DIMENSIONS;
 
 beforeAll(async () => {
   engine = new PGLiteEngine();
@@ -50,7 +52,11 @@ beforeAll(async () => {
       { chunk_index: 0, chunk_text: chunkText, chunk_source: 'compiled_truth' },
     ]);
   }
+});
 
+beforeEach(() => {
+  process.env.GBRAIN_EMBEDDING_MODEL = 'openai:text-embedding-3-large';
+  process.env.GBRAIN_EMBEDDING_DIMENSIONS = String(DIMS);
   configureGateway({
     embedding_model: 'openai:text-embedding-3-large',
     embedding_dimensions: DIMS,
@@ -58,10 +64,15 @@ beforeAll(async () => {
   });
   __setEmbedTransportForTests(async (args: any) => ({
     embeddings: args.values.map(() => FAKE_EMB),
+    usage: { tokens: 0 },
   }) as any);
 });
 
 afterAll(async () => {
+  if (savedEmbeddingModel === undefined) delete process.env.GBRAIN_EMBEDDING_MODEL;
+  else process.env.GBRAIN_EMBEDDING_MODEL = savedEmbeddingModel;
+  if (savedEmbeddingDimensions === undefined) delete process.env.GBRAIN_EMBEDDING_DIMENSIONS;
+  else process.env.GBRAIN_EMBEDDING_DIMENSIONS = savedEmbeddingDimensions;
   __setEmbedTransportForTests(null);
   resetGateway();
   await engine.disconnect();

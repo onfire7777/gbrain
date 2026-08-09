@@ -16,6 +16,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { PGLiteEngine } from '../src/core/pglite-engine.ts';
 import { hybridSearch } from '../src/core/search/hybrid.ts';
+import { __unconfigureGatewayForTests, resetGateway } from '../src/core/ai/gateway.ts';
 import type { PageInput, HybridSearchMeta } from '../src/core/types.ts';
 
 let engine: PGLiteEngine;
@@ -36,8 +37,14 @@ beforeAll(async () => {
 afterAll(async () => {
   if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = savedKey;
+  resetGateway();
   await engine.disconnect();
 });
+
+function disableOpenAI(): void {
+  delete process.env.OPENAI_API_KEY;
+  __unconfigureGatewayForTests();
+}
 
 async function runWithMeta(query: string, opts: Parameters<typeof hybridSearch>[2] = {}): Promise<HybridSearchMeta | null> {
   let captured: HybridSearchMeta | null = null;
@@ -47,7 +54,7 @@ async function runWithMeta(query: string, opts: Parameters<typeof hybridSearch>[
 
 describe('hybridSearch return shape (v0.25.0 keeps SearchResult[])', () => {
   test('returns SearchResult[] (unchanged from Cathedral II contract)', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const out = await hybridSearch(engine, 'alice');
     expect(Array.isArray(out)).toBe(true);
   });
@@ -55,7 +62,7 @@ describe('hybridSearch return shape (v0.25.0 keeps SearchResult[])', () => {
 
 describe('hybridSearch onMeta callback — vector_enabled', () => {
   test('false when OPENAI_API_KEY is missing (keyword-only path)', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const meta = await runWithMeta('alice');
     expect(meta).not.toBeNull();
     expect(meta!.vector_enabled).toBe(false);
@@ -64,13 +71,13 @@ describe('hybridSearch onMeta callback — vector_enabled', () => {
 
 describe('hybridSearch onMeta callback — detail_resolved', () => {
   test('passes through explicit detail override (caller specified "high")', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const meta = await runWithMeta('alice', { detail: 'high' });
     expect(meta!.detail_resolved).toBe('high');
   });
 
   test('detail_resolved reflects autoDetect output when caller omits detail', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const meta = await runWithMeta('alice');
     expect([null, 'low', 'medium', 'high']).toContain(meta!.detail_resolved);
   });
@@ -78,13 +85,13 @@ describe('hybridSearch onMeta callback — detail_resolved', () => {
 
 describe('hybridSearch onMeta callback — expansion_applied', () => {
   test('false when expansion flag is off', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const meta = await runWithMeta('alice', { expansion: false });
     expect(meta!.expansion_applied).toBe(false);
   });
 
   test('false when OPENAI_API_KEY missing (early-return short-circuits expansion)', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const meta = await runWithMeta('alice', {
       expansion: true,
       expandFn: async () => ['alice', 'alice example', 'the person alice'],
@@ -95,7 +102,7 @@ describe('hybridSearch onMeta callback — expansion_applied', () => {
 
 describe('onMeta callback omitted', () => {
   test('hybridSearch works without onMeta (existing Cathedral II callers unaffected)', async () => {
-    delete process.env.OPENAI_API_KEY;
+    disableOpenAI();
     const out = await hybridSearch(engine, 'alice');
     expect(Array.isArray(out)).toBe(true);
   });
