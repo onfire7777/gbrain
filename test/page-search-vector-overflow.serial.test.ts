@@ -23,6 +23,8 @@ import { resetPgliteState } from './helpers/reset-pglite.ts';
 // blows the output past the cap, matching a real large export (a Google
 // Docs dump, a long mailing-list thread) where the words don't repeat
 // like lorem-ipsum filler does.
+// This intentionally memory-heavy PGlite integration belongs in the serial lane;
+// four concurrent database shards can turn its ~1.5s isolated runtime into >30s.
 const OVERSIZED_BODY = Array.from({ length: 200_000 }, (_, i) => `token${i.toString(36)}`).join(' '); // ~2MB, ~2.7MB serialized tsvector
 
 describe('#2704: oversized page body no longer overflows pages.search_vector', () => {
