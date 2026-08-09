@@ -16,6 +16,9 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PGLiteEngine } from '../src/core/pglite-engine.ts';
 import { operations } from '../src/core/operations.ts';
 import type { OperationContext } from '../src/core/operations.ts';
@@ -24,8 +27,12 @@ import type { PageInput } from '../src/core/types.ts';
 
 let engine: PGLiteEngine;
 const savedKey = process.env.OPENAI_API_KEY;
+const savedHome = process.env.GBRAIN_HOME;
+let isolatedHome: string;
 
 beforeAll(async () => {
+  isolatedHome = mkdtempSync(join(tmpdir(), 'gbrain-mcp-eval-'));
+  process.env.GBRAIN_HOME = isolatedHome;
   delete process.env.OPENAI_API_KEY; // force keyword-only path so tests don't need live credentials
   engine = new PGLiteEngine();
   await engine.connect({});
@@ -68,7 +75,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = savedKey;
+  if (savedHome === undefined) delete process.env.GBRAIN_HOME;
+  else process.env.GBRAIN_HOME = savedHome;
   await engine.disconnect();
+  rmSync(isolatedHome, { recursive: true, force: true });
 });
 
 beforeEach(async () => {

@@ -40,7 +40,6 @@ test/helpers/with-env.test.ts
 test/http-transport.test.ts
 test/init-migrate-only.test.ts
 test/integrations.test.ts
-test/mcp-eval-capture.test.ts
 test/migrate.test.ts
 test/migration-orchestrator-v0_31_0.test.ts
 test/migration-resume.test.ts
