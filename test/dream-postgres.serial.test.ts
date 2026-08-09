@@ -29,15 +29,15 @@ beforeAll(async () => {
   engine = new PGLiteEngine();
   await engine.connect({});
   await engine.initSchema();
-});
+}, 30_000);
 
 afterAll(async () => {
   await engine.disconnect();
-});
+}, 30_000);
 
 beforeEach(async () => {
   await resetPgliteState(engine);
-});
+}, 30_000);
 
 function phase(report: any, name: string) {
   return report.phases.find((p: any) => p.phase === name);

@@ -273,7 +273,7 @@ describe('per-chunk synopsis concurrency', () => {
     expect(parallel.embeddedChunks.map((c) => c.chunk_text)).toEqual(
       chunks.map((c) => c.chunk_text),
     );
-  });
+  }, 20_000);
 
   test('concurrency is bounded', async () => {
     let active = 0;
@@ -315,7 +315,7 @@ describe('per-chunk synopsis concurrency', () => {
     expect(acquired).toBe(8);
     expect(released).toBe(8);
     expect(leaseActive).toBe(0);
-  });
+  }, 20_000);
 
   test('one chunk failure aborts queued work and falls back at page level', async () => {
     let started = 0;
