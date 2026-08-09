@@ -683,13 +683,11 @@ export async function hardenBrainRepo(opts: HardenOpts): Promise<DurabilityRepor
   if (opts.pat) push('credential', wireRepoCredential(repoPath, opts.pat, dryRun));
   else push('credential', { status: 'skipped', detail: 'no PAT provided — relying on existing git auth' });
 
-  // 3. local untracked hook
-  push('hook', installLocalHook(repoPath, dryRun));
-  // 4. committed helper
+  // 3. committed helper
   push('helper', installHelper(repoPath, dryRun));
-  // 5. resolver/AGENTS rules
+  // 4. resolver/AGENTS rules
   push('agents', patchResolverFile(repoPath, dryRun));
-  // 6. cron
+  // 5. cron
   if (installCron) push('cron', installDurabilityCron(sourceId, repoPath, branch, intervalSec, dryRun));
   else push('cron', { status: 'skipped', detail: '--no-cron' });
 
@@ -712,6 +710,10 @@ export async function hardenBrainRepo(opts: HardenOpts): Promise<DurabilityRepor
   } else {
     push('verify', { status: 'skipped', detail: '--no-verify' });
   }
+
+  // 6. Install the local hook only after our own scaffolding commit. Otherwise
+  // that commit launches a detached push which races commitScaffolding's push.
+  push('hook', installLocalHook(repoPath, dryRun));
 
   const missing = steps.filter(s => s.status === 'fixed').map(s => s.step);
   const fixed = missing;

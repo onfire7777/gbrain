@@ -47,24 +47,6 @@ async function waitForOrigin(bare: string, expectSha: string, ms = 30_000): Prom
   return false;
 }
 
-/** #2943 (index.lock form): hardenBrainRepo installs the post-commit hook
- * BEFORE committing the scaffolding, so that commit fires the hook and
- * detaches a background brain_push. If that push loses the ref race against
- * hardenBrainRepo's own synchronous push, it falls back to `git pull
- * --rebase`, which takes .git/index.lock — racing the test body's first git
- * calls ("Unable to create '.../.git/index.lock': File exists"). Wait for the
- * detached push's terminal log line before handing the repo to the test. */
-async function waitForHookPushSettled(ms = 30_000): Promise<void> {
-  const log = join(process.env.GBRAIN_HOME!, 'brain-push.log');
-  const terminal = /\[push\] (ok|lock-timeout|LOCAL-ONLY)/;
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    if (existsSync(log) && terminal.test(readFileSync(log, 'utf-8'))) return;
-    await new Promise(r => setTimeout(r, 150));
-  }
-  throw new Error(`detached hook push did not settle within ${ms}ms (${log})`);
-}
-
 let root: string, work: string, bare: string;
 let oldHome: string | undefined, oldGbrainHome: string | undefined;
 
@@ -83,7 +65,6 @@ beforeEach(async () => {
   git(work, 'add', 'README.md'); git(work, 'commit', '-qm', 'init'); git(work, 'push', '-q', 'origin', 'main');
   git(work, 'remote', 'set-head', 'origin', 'main');
   await hardenBrainRepo({ repoPath: work, sourceId: 'wiki', pat: 'ghp_x', installCron: false });
-  await waitForHookPushSettled();
 });
 afterEach(() => {
   if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome;
