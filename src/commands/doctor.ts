@@ -2574,7 +2574,7 @@ export async function checkFactsEmbeddingWidthConsistency(engine: BrainEngine): 
 export async function checkSourceRoutingHealth(engine: BrainEngine): Promise<Check> {
   try {
     const sources = await engine.executeRaw<{ id: string }>(
-      `SELECT id FROM sources WHERE id <> 'default'`,
+      `SELECT id FROM sources WHERE id <> 'default' AND archived = false`,
     );
     if (sources.length === 0) {
       return { name: 'source_routing_health', status: 'ok', message: 'Single-source brain (no federation to check)' };

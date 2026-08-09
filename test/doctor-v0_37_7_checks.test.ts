@@ -71,6 +71,15 @@ describe('checkSourceRoutingHealth (#1167)', () => {
     expect(r.message).toMatch(/--source-id/);
     expect(r.message).toMatch(/gbrain sources current/);
   });
+
+  test('archived empty sources are ignored', async () => {
+    await engine.executeRaw(
+      `INSERT INTO sources (id, name, archived) VALUES ('archived-empty', 'archived-empty', true)`,
+    );
+    const r = await checkSourceRoutingHealth(engine);
+    expect(r.status).toBe('ok');
+    expect(r.message).toMatch(/single-source/i);
+  });
 });
 
 describe('checkOauthConfidentialHealth (#1166)', () => {
